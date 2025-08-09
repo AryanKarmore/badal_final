@@ -1,2 +1,2 @@
 # badal_final
-A chatbot made for college students to respond to any of their queries
+A RAG based chatbot made for college students to respond to any of their queries
