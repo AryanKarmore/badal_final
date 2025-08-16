@@ -4,7 +4,7 @@ import re
 import uuid
 from flask import Flask, request, jsonify
 from sentence_transformers import SentenceTransformer
-from pinecone import Pinecone, ServerlessSpec
+from pinecone import Pinecone
 import google.generativeai as genai
 from dotenv import load_dotenv
 import logging
@@ -53,13 +53,19 @@ def initialize_models():
         pc = Pinecone(api_key=PINECONE_API_KEY)
         
         # Create index if it doesn't exist
-        if PINECONE_INDEX_NAME not in [i["name"] for i in pc.list_indexes()]:
+        existing_indexes = pc.list_indexes()
+        if PINECONE_INDEX_NAME not in [i.name for i in existing_indexes]:
             logger.info(f"Creating index: {PINECONE_INDEX_NAME}")
             pc.create_index(
                 name=PINECONE_INDEX_NAME,
                 dimension=1024,  # e5-large-v2 dimension
                 metric="cosine",
-                spec=ServerlessSpec(cloud="aws", region=PINECONE_REGION)
+                spec={
+                    "serverless": {
+                        "cloud": "aws",
+                        "region": PINECONE_REGION
+                    }
+                }
             )
         
         index = pc.Index(PINECONE_INDEX_NAME)
