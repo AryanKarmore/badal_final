@@ -37,11 +37,15 @@ else:
 model = None
 index = None
 parent_lookup = {}
+initialized = False
 
 def initialize_models():
     """Initialize sentence transformer model and Pinecone index"""
-    global model, index
+    global model, index, initialized
     
+    if initialized:
+        return
+        
     try:
         logger.info("Loading embedding model...")
         model = SentenceTransformer(EMBED_MODEL)
@@ -69,6 +73,8 @@ def initialize_models():
             )
         
         index = pc.Index(PINECONE_INDEX_NAME)
+        load_data_files()
+        initialized = True
         logger.info("Models initialized successfully")
         
     except Exception as e:
@@ -91,6 +97,11 @@ def load_data_files():
             
     except Exception as e:
         logger.error(f"Error loading data files: {str(e)}")
+
+def ensure_initialized():
+    """Ensure models are initialized before handling requests"""
+    if not initialized:
+        initialize_models()
 
 def chunk_list(lst, n):
     """Split list into chunks of size n"""
@@ -210,16 +221,19 @@ Answer:"""
 @app.route("/", methods=["GET"])
 def health_check():
     """Health check endpoint"""
+    ensure_initialized()
     return jsonify({
         "status": "healthy",
         "message": "RAG API is running",
         "models_loaded": model is not None and index is not None,
-        "gemini_configured": gemini_model is not None
+        "gemini_configured": gemini_model is not None,
+        "webhook_url": f"{request.url_root}webhook"
     })
 
 @app.route("/upload", methods=["POST"])
 def upload_data():
     """Endpoint to upload data to Pinecone"""
+    ensure_initialized()
     try:
         upload_data_to_pinecone()
         return jsonify({"message": "Data uploaded successfully to Pinecone"})
@@ -229,6 +243,7 @@ def upload_data():
 @app.route("/search", methods=["POST"])
 def search():
     """Search for similar chunks"""
+    ensure_initialized()
     try:
         data = request.get_json()
         query = data.get("query", "")
@@ -257,6 +272,7 @@ def search():
 @app.route("/ask", methods=["POST"])
 def ask():
     """Main RAG endpoint - search and generate answer"""
+    ensure_initialized()
     try:
         data = request.get_json()
         query = data.get("query", "")
@@ -300,6 +316,7 @@ def ask():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     """Webhook endpoint for external integrations"""
+    ensure_initialized()
     try:
         data = request.get_json()
         
@@ -332,21 +349,9 @@ def webhook():
         logger.error(f"Webhook error: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
-# Initialize everything when the app starts
-@app.before_first_request
-def startup():
-    """Initialize models and load data on startup"""
-    try:
-        initialize_models()
-        load_data_files()
-        logger.info("Application startup completed successfully")
-    except Exception as e:
-        logger.error(f"Startup error: {str(e)}")
-
 if __name__ == "__main__":
     # For local development
     initialize_models()
-    load_data_files()
     
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
