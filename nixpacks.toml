@@ -1,0 +1,11 @@
+[phases.install]
+nixPkgs = ["python311"]
+
+[phases.build]
+cmds = [
+  "pip install --no-cache-dir --index-url https://download.pytorch.org/whl/cpu torch==2.1.0+cpu",
+  "pip install --no-cache-dir -r requirements.txt"
+]
+
+[start]
+cmd = "gunicorn --bind 0.0.0.0:$PORT app:app --timeout 300 --workers 1"
